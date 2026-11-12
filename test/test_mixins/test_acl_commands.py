@@ -157,7 +157,7 @@ def test_acl_list(r: ClientType):
     assert "~objects:*" in user_rule
     assert "resetchannels &message:*" in user_rule
     assert "(%W~app* resetchannels -@all +set)" in user_rule
-    assert "(~app* resetchannels &x -@all +get)" in user_rule
+    assert "(%RW~app* resetchannels &x -@all +get)" in user_rule
     assert "(%W~app* resetchannels -@all -hset)" in user_rule
 
 
@@ -296,12 +296,12 @@ def test_acl_getuser_setuser(r: ClientType):
         r,
         [
             {"channels": "", "commands": "-@all +set", "keys": "%W~app*"},
-            {"channels": "&x", "commands": "-@all +get", "keys": "~app*"},
+            {"channels": "&x", "commands": "-@all +get", "keys": "%RW~app*"},
             {"channels": "", "commands": "-@all -hset", "keys": "%W~app*"},
         ],
         [
             ["commands", "-@all +set", "keys", "%W~app*", "channels", ""],
-            ["commands", "-@all +get", "keys", "~app*", "channels", "&x"],
+            ["commands", "-@all +get", "keys", "%RW~app*", "channels", "&x"],
             ["commands", "-@all -hset", "keys", "%W~app*", "channels", ""],
         ],
     )

@@ -35,7 +35,7 @@ def test_acl_save_load():
         assert "~objects:*" in user_rule
         assert "resetchannels &message:*" in user_rule
         assert "(%W~app* resetchannels -@all +set)" in user_rule
-        assert "(~app* resetchannels &x -@all +get)" in user_rule
+        assert "(%RW~app* resetchannels &x -@all +get)" in user_rule
         assert "(%W~app* resetchannels -@all -hset)" in user_rule
 
     # assert acl file is loaded correctly
@@ -53,7 +53,7 @@ def test_acl_save_load():
     assert "~objects:*" in user_rule
     assert "resetchannels &message:*" in user_rule
     assert "(%W~app* resetchannels -@all +set)" in user_rule
-    assert "(~app* resetchannels &x -@all +get)" in user_rule
+    assert "(%RW~app* resetchannels &x -@all +get)" in user_rule
     assert "(%W~app* resetchannels -@all -hset)" in user_rule
 
     os.remove(acl_filename)

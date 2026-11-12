@@ -66,8 +66,8 @@ class AclCommandsMixin(CommandsMixinBase):
                 user_acl.remove_password_hex(arg[1:])
             elif prefix == ord("+") or prefix == ord("-"):
                 user_acl.add_command_or_category(arg)
-            elif prefix == ord("~"):
-                user_acl.add_key_pattern(arg[1:])
+            elif prefix == ord("~") or prefix == ord("%"):
+                user_acl.add_key_pattern(arg)
             elif prefix == ord("&"):
                 user_acl.add_channel_pattern(arg[1:])
 
