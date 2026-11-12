@@ -106,19 +106,34 @@ class ConnectionCommandsMixin(CommandsMixinBase):
 
     @command(name="HELLO", fixed=(), repeat=(bytes,))
     def hello(self, *args: bytes) -> dict[str, Any]:
-        self._client_info["resp"] = 2 if len(args) == 0 else Int.decode(args[0])
+        resp = 2 if len(args) == 0 else Int.decode(args[0])
+        if resp not in (2, 3):
+            raise SimpleError(msgs.HELLO_UNSUPPORTED_PROTOCOL_MSG)
+        username: bytes | None = None
+        password: bytes | None = None
+        client_name: str | None = None
         i = 1
         while i < len(args):
-            if args[i] == b"SETNAME" and i + 1 < len(args):
-                self._client_info["name"] = args[i + 1].decode("utf-8")
+            if casematch(args[i], b"SETNAME") and i + 1 < len(args):
+                client_name = args[i + 1].decode("utf-8")
                 i += 2
-            elif args[i] == b"AUTH" and i + 2 < len(args):
-                user = args[i + 1]
-                password = args[i + 2]
-                self._server.acl.get_user_acl(user).check_password(password)
+            elif casematch(args[i], b"AUTH") and i + 2 < len(args):
+                username, password = args[i + 1], args[i + 2]
                 i += 3
             else:
                 raise SimpleError(msgs.SYNTAX_ERROR_MSG)
+        if username is not None:
+            # Authentication must not create the user, and a failure leaves this connection untouched.
+            user_acl = self._server.acl.find_user_acl(username)
+            if user_acl is None or not user_acl.check_password(password):
+                self._server.acl.add_log_record(b"auth", b"auth", b"AUTH", username, self._client_info.as_bytes())
+                raise SimpleError(msgs.AUTH_FAILURE)
+        # Everything validated: apply the connection-local state (this connection only, nothing server-wide).
+        self._client_info["resp"] = resp
+        if client_name is not None:
+            self._client_info["name"] = client_name
+        if username is not None:
+            self._client_info["user"] = username.decode()
         data = {
             "server": "fakeredis",
             "version": lib_version,

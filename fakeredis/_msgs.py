@@ -206,6 +206,8 @@ INVALID_OVERFLOW_TYPE = "ERR Invalid OVERFLOW type specified"
 
 # ACL specific errors
 AUTH_FAILURE = "WRONGPASS invalid username-password pair or user is disabled."
+ACL_DEFAULT_USER_NOT_REMOVABLE = "ERR The 'default' user cannot be removed"
+HELLO_UNSUPPORTED_PROTOCOL_MSG = "NOPROTO unsupported protocol version"
 
 # TDigest error messages
 TDIGEST_KEY_EXISTS = "T-Digest: key already exists"

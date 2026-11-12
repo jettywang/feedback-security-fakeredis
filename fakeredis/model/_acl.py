@@ -130,13 +130,16 @@ class UserAccessControlList:
         self._passwords.clear()
 
     def check_password(self, password: bytes | None) -> bool:
+        # A disabled user cannot authenticate at all, even with a matching password or the nopass flag.
+        if not self.enabled:
+            return False
         password_provided: bool = password is not None and password != b""
         if self._nopass:
             return not password_provided
         elif not password_provided or password is None:
             return False
         password_hex = hashlib.sha256(password).hexdigest().encode()
-        return password_hex in self._passwords and self.enabled
+        return password_hex in self._passwords
 
     def add_password_hex(self, password_hex: bytes) -> None:
         self._nopass = False
@@ -315,6 +318,10 @@ class AccessControlList:
     def get_user_acl(self, username: bytes) -> UserAccessControlList:
         return self._user_acl.setdefault(username, UserAccessControlList())
 
+    def find_user_acl(self, username: bytes) -> UserAccessControlList | None:
+        """Look up a user without creating it, for paths (AUTH, HELLO, GETUSER) that must not add users."""
+        return self._user_acl.get(username)
+
     def as_rules(self) -> list[bytes]:
         res: list[bytes] = []
         for username, user_acl in self._user_acl.items():
@@ -322,8 +329,8 @@ class AccessControlList:
             res.append(rule_str)
         return res
 
-    def del_user(self, username: bytes) -> None:
-        self._user_acl.pop(username, None)
+    def del_user(self, username: bytes) -> bool:
+        return self._user_acl.pop(username, None) is not None
 
     def reset_log(self) -> None:
         self._log.clear()
@@ -370,8 +377,8 @@ class AccessControlList:
             # auth command is always allowed
             return
         user_acl = self._user_acl[username]
-        if not user_acl.enabled:
-            raise SimpleError("User disabled")
+        # Redis does not re-check the enabled flag per command: `ACL SETUSER <user> off` only blocks new
+        # authentications, while connections that are already authenticated keep their permissions.
         if user_acl.unrestricted():
             return
         command_info = UserAccessControlList._get_command_info(fields)

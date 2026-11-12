@@ -20,7 +20,9 @@ class AclCommandsMixin(CommandsMixinBase):
         return self._server.acl
 
     def _check_user_password(self, username: bytes, password: bytes | None) -> bool:
-        return self._acl.get_user_acl(username).check_password(password)
+        # Authentication must not create the user: a failed login leaves the ACL untouched.
+        user_acl = self._acl.find_user_acl(username)
+        return user_acl is not None and user_acl.check_password(password)
 
     def _set_user_acl(self, username: bytes, *args: bytes) -> None:
         user_acl = self._acl.get_user_acl(username)
@@ -85,7 +87,13 @@ class AclCommandsMixin(CommandsMixinBase):
             raise SimpleError(msgs.WRONG_ARGS_MSG6.format("AUTH"))
         username = None if len(args) == 1 else args[0]
         password = args[1] if len(args) == 2 else args[0]
-        if (username is None or username == b"default") and (password == self._server_config.get(b"requirepass", b"")):
+        default_acl = self._acl.find_user_acl(b"default")
+        if (
+            (username is None or username == b"default")
+            and (password == self._server_config.get(b"requirepass", b""))
+            and default_acl is not None
+            and default_acl.enabled
+        ):
             self._client_info["user"] = "default"
             return OK
         username = username or b"default"
@@ -120,14 +128,27 @@ class AclCommandsMixin(CommandsMixinBase):
     def acl_list(self) -> list[bytes]:
         return self._acl.as_rules()
 
-    @command(name="ACL DELUSER", fixed=(bytes,), repeat=())
-    def acl_deluser(self, username: bytes) -> SimpleString:
-        self._acl.del_user(username)
-        return OK
+    @command(name="ACL DELUSER", fixed=(bytes,), repeat=(bytes,))
+    def acl_deluser(self, *usernames: bytes) -> int:
+        deleted = 0
+        for username in usernames:
+            if casematch(username, b"default"):
+                raise SimpleError(msgs.ACL_DEFAULT_USER_NOT_REMOVABLE)
+            if not self._acl.del_user(username):
+                continue
+            deleted += 1
+            # Redis terminates every connection authenticated as a deleted user.
+            for sock in list(self._server.sockets):
+                if sock._client_info.user == username:
+                    sock.kill()
+        return deleted
 
     @command(name="ACL GETUSER", fixed=(bytes,), repeat=())
-    def acl_getuser(self, username: bytes) -> list[bytes | list[bytes] | list[dict[str, bytes]]]:
-        res = self._acl.get_user_acl(username).as_array()
+    def acl_getuser(self, username: bytes) -> list[bytes | list[bytes] | list[dict[str, bytes]]] | None:
+        user_acl = self._acl.find_user_acl(username)
+        if user_acl is None:
+            return None
+        res: list[bytes | list[bytes] | list[dict[str, bytes]]] = user_acl.as_array()
         return res
 
     @command(name="ACL USERS", fixed=(), repeat=())

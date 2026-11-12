@@ -16,6 +16,13 @@ toc_depth: 2
 
 ### 🐛 Bug Fixes
 
+- fix(acl): `ACL SETUSER <user> off` no longer rejects commands on connections that are already authenticated;
+  like Redis, it only blocks new authentications (`AUTH` and `HELLO ... AUTH` fail with WRONGPASS)
+- fix(acl): `ACL DELUSER` terminates connections authenticated as the deleted users, refuses to delete the
+  `default` user, accepts multiple usernames, and returns the number of deleted users
+- fix(acl): `HELLO ... AUTH` actually authenticates the connection (previously any password was accepted and the
+  connection stayed `default`), and failed `AUTH`/`HELLO` logins no longer create the user in the ACL
+- fix(acl): `ACL GETUSER` returns nil for a user that does not exist instead of creating it
 - fix: support redis-py 8.2: creating a client no longer fails with
   `AttributeError: 'method_descriptor' object has no attribute '__closure__'`, `FakeAsyncRedis` can send commands
   again, and RESP3 connections still make no DNS lookup (#636)
