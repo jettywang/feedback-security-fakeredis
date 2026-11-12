@@ -359,10 +359,17 @@ class AccessControlList:
         )
         self._log.append(entry)
 
-    def validate_command(self, username: bytes, client_info: ClientInfo, fields: list[bytes]) -> None:
+    def validate_command(
+        self,
+        username: bytes,
+        client_info: ClientInfo,
+        fields: list[bytes],
+        context: bytes = b"toplevel",
+    ) -> None:
         """Raise if `username` may not run the command in `fields`.
 
         `client_info` is only rendered when a denial is logged: doing it for every command costs more than the check.
+        `context` is the ACL log context: `toplevel` for a client command, `lua` for a `redis.call` inside a script.
         """
         if username not in self._user_acl:
             return
@@ -378,14 +385,19 @@ class AccessControlList:
         if command_info is None:
             return
         if not user_acl.command_allowed(command_info, fields):
-            self.add_log_record(b"command", b"toplevel", fields[0], username, client_info.as_bytes())
+            self.add_log_record(b"command", context, fields[0], username, client_info.as_bytes())
             raise SimpleError(msgs.NO_PERMISSION_ERROR.format(username.decode(), fields[0].lower().decode()))
-        keys_not_allowed = user_acl.keys_not_allowed(command_info, fields)
-        if len(keys_not_allowed) > 0:
-            self.add_log_record(b"key", b"toplevel", keys_not_allowed[0], username, client_info.as_bytes())
-            raise SimpleError(msgs.NO_PERMISSION_KEY_ERROR)
+        # EVAL/EVALSHA/FCALL declare no keys of their own: every key is reached through redis.call inside the script,
+        # where it is checked against the calling user's ACL. The static indices in commands.json point at numkeys.
+        is_script_runner = b"script_runner" in command_info[2]
+        check_keys = not is_script_runner or context != b"toplevel"
+        if check_keys:
+            keys_not_allowed = user_acl.keys_not_allowed(command_info, fields)
+            if len(keys_not_allowed) > 0:
+                self.add_log_record(b"key", context, keys_not_allowed[0], username, client_info.as_bytes())
+                raise SimpleError(msgs.NO_PERMISSION_KEY_ERROR)
         if b"@pubsub" in command_info[6]:
             channels_not_allowed = user_acl.channels_not_allowed(command_info, fields)
             if len(channels_not_allowed) > 0:
-                self.add_log_record(b"channel", b"toplevel", channels_not_allowed[0], username, client_info.as_bytes())
+                self.add_log_record(b"channel", context, channels_not_allowed[0], username, client_info.as_bytes())
                 raise SimpleError(msgs.NO_PERMISSION_CHANNEL_ERROR)

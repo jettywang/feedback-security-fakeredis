@@ -184,17 +184,25 @@ class ScriptingCommandsMixin(CommandsMixinBase):
         # Check if we've set any global variables before making any change.
         _check_for_lua_globals(lua_runtime, expected_globals)
         cmd = decode_command_bytes(op)
-        if cmd in COMMANDS_WITH_SUB and args:
+        raw_args = [_convert_redis_arg(arg) for arg in args]
+        if cmd in COMMANDS_WITH_SUB and raw_args:
             # A container command: its subcommand is part of the name it is registered under.
-            cmd += " " + decode_command_bytes(_convert_redis_arg(args[0]))
-            args = args[1:]
+            cmd += " " + decode_command_bytes(raw_args[0])
+            raw_args = raw_args[1:]
         func, sig = self._name_to_func(cmd)
         if func is None:
             raise SimpleError(msgs.WRONG_ARGS_MSG7)
-        new_args = [_convert_redis_arg(arg) for arg in args]
-        result = self._run_command(func, sig, new_args, True)
+        # The script runs with the permissions of the user that invoked it, not whoever loaded it. Every command the
+        # script issues is therefore checked against that user's command/key/channel ACL before it touches the data.
+        self._check_script_acl(cmd, raw_args)
+        result = self._run_command(func, sig, raw_args, True)
         result = self._convert_redis_result(lua_runtime, result)
         return result
+
+    def _check_script_acl(self, cmd: str, args: list[bytes]) -> None:
+        """ACL check for a command issued by redis.call/pcall inside a running script."""
+        fields = [cmd.encode()] + list(args)
+        self._server.acl.validate_command(self._client_info.user, self._client_info, fields, context=b"lua")
 
     def _lua_setresp(self, lua_runtime: Any, expected_globals: set[Any], *args: Any) -> None:
         """`redis.setresp(n)` — pick the RESP version `redis.call` replies in for this script."""
@@ -505,6 +513,8 @@ class ScriptingCommandsMixin(CommandsMixinBase):
             raise SimpleError(wrong_args_msg) from None
         if read_only and is_write_command(sig.name.encode()):
             raise SimpleError(msgs.SCRIPT_READ_ONLY_WRITE_MSG)
+        # Like redis.call in an EVAL script, a function's commands run under the calling user's ACL.
+        self._check_script_acl(sig.name, call_args)
         result = self._run_command(func, sig, call_args, True)
         return self._convert_redis_result(lua_runtime, result)
 
