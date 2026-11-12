@@ -115,7 +115,12 @@ class ConnectionCommandsMixin(CommandsMixinBase):
             elif args[i] == b"AUTH" and i + 2 < len(args):
                 user = args[i + 1]
                 password = args[i + 2]
-                self._server.acl.get_user_acl(user).check_password(password)
+                if user == b"default" and password == self._server.config.get(b"requirepass", b""):
+                    self._client_info["user"] = "default"
+                elif self._server.acl.get_user_acl(user).check_password(password):
+                    self._client_info["user"] = user.decode()
+                else:
+                    raise SimpleError(msgs.AUTHENTICATION_FAILED)
                 i += 3
             else:
                 raise SimpleError(msgs.SYNTAX_ERROR_MSG)

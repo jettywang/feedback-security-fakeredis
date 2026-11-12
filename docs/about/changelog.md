@@ -16,6 +16,11 @@ toc_depth: 2
 
 ### 🐛 Bug Fixes
 
+- fix(acl): `SUBSCRIBE`/`PSUBSCRIBE` check every channel/pattern argument against the user's `&` channel patterns
+  instead of only the first one, so a mixed subscribe no longer bypasses channel permissions; the unsubscribe family
+  and `PUBSUB` introspection subcommands are no longer channel-gated
+- fix(acl): `HELLO ... AUTH` authenticates the connection (or fails with `NOPERM Authentication failed.`) instead of
+  silently ignoring the credentials, so clients built with `username`/`password` run as the intended ACL user
 - fix: support redis-py 8.2: creating a client no longer fails with
   `AttributeError: 'method_descriptor' object has no attribute '__closure__'`, `FakeAsyncRedis` can send commands
   again, and RESP3 connections still make no DNS lookup (#636)

@@ -206,6 +206,7 @@ INVALID_OVERFLOW_TYPE = "ERR Invalid OVERFLOW type specified"
 
 # ACL specific errors
 AUTH_FAILURE = "WRONGPASS invalid username-password pair or user is disabled."
+AUTHENTICATION_FAILED = "NOPERM Authentication failed."
 
 # TDigest error messages
 TDIGEST_KEY_EXISTS = "T-Digest: key already exists"

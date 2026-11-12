@@ -116,10 +116,25 @@ class UserAccessControlList:
             res = res.union(fnmatch.filter(keys, pat))
         return list(set(keys) - res)
 
+    @staticmethod
+    def _get_channels(fields: list[bytes]) -> list[bytes]:
+        """Channel arguments of a pub/sub command.
+
+        The subscribe family takes a variadic channel list, while the publish commands take one channel followed by
+        the message payload, which is not a channel. The unsubscribe family only drops subscriptions, so it is not
+        channel-gated, and neither are the `PUBSUB` introspection subcommands.
+        """
+        command = fields[0].lower()
+        if command in (b"subscribe", b"psubscribe", b"ssubscribe"):
+            return fields[1:]
+        if command in (b"publish", b"spublish"):
+            return fields[1:2]
+        return []
+
     def channels_not_allowed(self, command_info: list[Any] | None, fields: list[bytes]) -> list[bytes]:
         if len(self._channel_patterns) == 0:
             return []
-        channels = fields[1:2]
+        channels = self._get_channels(fields)
         res: set[bytes] = set()
         for pat in self._channel_patterns:
             res = res.union(fnmatch.filter(channels, pat))
