@@ -235,8 +235,11 @@ class BaseFakeSocket(NotificationsMixin):
             except SimpleError:
                 unknown_command = True
                 raise
-            # ACL check
-            self._server.acl.validate_command(self._client_info.user, self._client_info, fields)
+            # ACL check. Commands replayed from a transaction's EXEC were already authorised when they were queued, and
+            # redis does not re-check them (it runs them through call(), below processCommand), so a permission revoked
+            # after the queue succeeded must not stop the EXEC.
+            if not self._in_transaction:
+                self._server.acl.validate_command(self._client_info.user, self._client_info, fields)
             with self._server.lock:
                 # Clean out old connections
                 while True:

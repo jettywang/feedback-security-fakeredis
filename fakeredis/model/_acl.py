@@ -371,7 +371,7 @@ class AccessControlList:
             return
         user_acl = self._user_acl[username]
         if not user_acl.enabled:
-            raise SimpleError("User disabled")
+            raise SimpleError(msgs.USER_DISABLED_ERROR)
         if user_acl.unrestricted():
             return
         command_info = UserAccessControlList._get_command_info(fields)
